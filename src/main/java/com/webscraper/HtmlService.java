@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
@@ -30,8 +31,7 @@ public class HtmlService {
         while (matcher.find()) {
             response.add(matcher.group());
         }
-        String baseUrl = System.getenv("BASE_URL");
-        return new HashSet<>(response.stream()
+        return response.stream()
                 .filter((u) -> !u.matches("^[a-zA-Z]"))
                 .map((u) -> {
                     if (u.contains("http") || u.contains("https")) {
@@ -40,8 +40,7 @@ public class HtmlService {
                     return baseUrl + u;
                 })
                 .filter((u) -> u.startsWith(baseUrl))
-                .filter((u) -> u.endsWith("html") || u.endsWith(("htm"))) // temporary?
-                .toList());
+                .filter((u) -> u.endsWith("html") || u.endsWith("htm")).collect(Collectors.toSet());
     }
 
     private String getHtmlContentFrom(String url) {
@@ -60,8 +59,8 @@ public class HtmlService {
 
     public Set<String> parseUniqueKeywordsFromUrl(String url) {
         String content = getHtmlContentFrom(url);
-        return new HashSet<>(Arrays.asList(content.split("\\s")).stream()
+        return Arrays.asList(content.split("\\s")).stream()
                 .filter((s) -> s.length() >= 4 && s.length() <= 32)
-                .toList());
+                .collect(Collectors.toSet());
     }
         }

@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.stream.Collectors;
 
 import org.eclipse.jetty.util.log.Slf4jLog;
 import org.slf4j.Logger;
@@ -115,12 +116,12 @@ public final class ScrapedDataPool {
     }
 
     private Set<String> filterUrlsThatShouldBePutIntoQueue(Set<String> urls) {
-        Set<String> urlsToFilter = new HashSet<>(
-                urlContentSet.stream().map((urlContent) -> urlContent.getUrl()).toList());
+        Set<String> urlsToFilter = urlContentSet.stream().map((urlContent) -> urlContent.getUrl())
+                .collect(Collectors.toSet());
         scrapedDataMap.values().stream()
                 .forEach((scrapedData) -> urlsToFilter.addAll(scrapedData.getUrls()));
-        return new HashSet<>(urls.stream()
-                .filter((url) -> !queue.contains(url) && !urlsToFilter.contains(url)).toList());
+        return urls.stream()
+                .filter((url) -> !queue.contains(url) && !urlsToFilter.contains(url)).collect(Collectors.toSet());
     }
 
     public Set<String> getCachedContainedUrls(String url) {
