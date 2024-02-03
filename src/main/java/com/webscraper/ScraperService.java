@@ -3,6 +3,9 @@ package com.webscraper;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -14,6 +17,7 @@ public class ScraperService {
     private static ScrapedDataPool pool;
     private HtmlService htmlService;
     private static Logger logger = LoggerFactory.getLogger(Slf4jLog.class);
+    private ExecutorService es = Executors.newCachedThreadPool();
 
     public ScraperService() {
         pool = ScrapedDataPool.getInstance();
@@ -62,6 +66,11 @@ public class ScraperService {
     public void scrape(String crawlId, String keyword) {
         boolean shouldEndRecursion = pool.isUrlsQueueEmpty();
         if (shouldEndRecursion) {
+            try {
+                es.awaitTermination(1, TimeUnit.MINUTES);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
             pool.finishScraping(crawlId);
             return;
         }
@@ -70,7 +79,7 @@ public class ScraperService {
         Set<String> innerUrls = htmlService.parseUrlsContainedIn(url);
         pool.addUnscrapedUrlsToQueue(innerUrls);
         addScrapedDataToPoolIfContainsKeyword(crawlId, url, keyword, innerUrls);
-        scrape(crawlId, keyword);
+        es.submit(new ScrapeRunnable(this, crawlId, keyword));
     }
 
     private void addScrapedDataToPoolIfContainsKeyword(String id, String url, String keyword, Set<String> innerUrls) {

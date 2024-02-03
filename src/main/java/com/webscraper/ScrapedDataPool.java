@@ -58,7 +58,6 @@ public final class ScrapedDataPool {
         scrapedDataMap.putIfAbsent(id, new ScrapedData(id));
     }
 
-    }
     private void addStartingUrlToQueue() {
         queue.add(System.getenv("BASE_URL"));
     }
