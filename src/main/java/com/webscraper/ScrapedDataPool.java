@@ -2,14 +2,25 @@ package com.webscraper;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+import org.eclipse.jetty.util.log.Slf4jLog;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class ScrapedDataPool {
+    private static Logger logger = LoggerFactory.getLogger(Slf4jLog.class);
     private static volatile ScrapedDataPool instance;
-    private HashMap<String, ScrapedData> activeScrapedData = new HashMap<>();
-    private Set<String> scrapedUrls = new HashSet<>();
+    private HashMap<String, ScrapedData> scrapedDataMap;
+    private Set<UrlContent> urlContentSet;
+    private ConcurrentLinkedQueue<String> queue;
 
     private ScrapedDataPool() {
+        scrapedDataMap = new HashMap<>();
+        urlContentSet = new HashSet<>();
+        queue = new ConcurrentLinkedQueue<String>();
     }
 
     public static ScrapedDataPool getInstance() {
@@ -38,18 +49,84 @@ public final class ScrapedDataPool {
         }
     }
 
-    public ScrapedData get(String id) {
-        return activeScrapedData.get(id);
+    public ScrapedData getScrapedData(String id) {
+        return scrapedDataMap.get(id);
     }
 
-    public void initializeNewScrapeData(String id) {
-        activeScrapedData.putIfAbsent(id, new ScrapedData(id));
+    public void init(String id) {
+        addStartingUrlToQueue();
+        scrapedDataMap.putIfAbsent(id, new ScrapedData(id));
     }
 
-    public void add(String id, Set<String> urls) {
-        if (activeScrapedData.containsKey(id)) {
-            activeScrapedData.put(id, new ScrapedData(id, urls));
-            scrapedUrls.addAll(urls);
+    }
+    private void addStartingUrlToQueue() {
+        queue.add(System.getenv("BASE_URL"));
+    }
+
+    public void addUrlToContentSet(String url, Set<String> uniqueKeywords, Set<String> innerUrls) {
+        urlContentSet.add(new UrlContent(url, uniqueKeywords, innerUrls));
+    }
+
+    public void addUrl(String id, String url) {
+        if (!scrapedDataMap.containsKey(id)) {
+            return;
         }
+        ScrapedData aux = scrapedDataMap.get(id);
+        aux.addUrl(url);
+        scrapedDataMap.put(id, aux);
     }
+
+    public Set<String> getKeywordsFrom(String url) {
+        Optional<Set<String>> optionalContent = urlContentSet
+                .stream()
+                .filter((c) -> c.getUrl().equals(url))
+                .map((c) -> c.getKeywords())
+                .findFirst();
+        return optionalContent.isPresent() ? optionalContent.get() : null;
+    }
+
+    public boolean isUrlsQueueEmpty() {
+        logger.info("queue size: " + queue.size());
+        return queue.isEmpty();
+    }
+
+    public String pollUrl() {
+        return queue.poll();
+    }
+
+    public boolean isKeywordCached(String id) {
+        return scrapedDataMap.get(id) != null;
+    }
+
+    public ScrapedData getCachedScrapedData(String id) {
+        return scrapedDataMap.get(id);
+    }
+
+    public void finishScraping(String id) {
+        ScrapedData aux = scrapedDataMap.get(id);
+        aux.setStatus("done");
+        scrapedDataMap.put(id, aux);
+    }
+
+    public void addUnscrapedUrlsToQueue(Set<String> urls) {
+        if (urls == null || urls.isEmpty()) {
+            return;
+        }
+        queue.addAll(filterUrlsThatShouldBePutIntoQueue(urls));
+    }
+
+    private Set<String> filterUrlsThatShouldBePutIntoQueue(Set<String> urls) {
+        Set<String> urlsToFilter = new HashSet<>(
+                urlContentSet.stream().map((urlContent) -> urlContent.getUrl()).toList());
+        scrapedDataMap.values().stream()
+                .forEach((scrapedData) -> urlsToFilter.addAll(scrapedData.getUrls()));
+        return new HashSet<>(urls.stream()
+                .filter((url) -> !queue.contains(url) && !urlsToFilter.contains(url)).toList());
+    }
+
+    public Set<String> getCachedContainedUrls(String url) {
+        Optional<UrlContent> optional = urlContentSet.stream().filter((uc) -> uc.getUrl().equals(url)).findFirst();
+        return optional.isPresent() ? optional.get().getInnerUrls() : null;
+    }
+
 }
